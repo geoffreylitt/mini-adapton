@@ -1,0 +1,10 @@
+{
+  "name": "mini-adapton-ts",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "esbuild": "^0.14.16",
+    "estrella": "^1.4.1"
+  }
+}
