@@ -6,17 +6,25 @@
 // Micro-Adapton
 //=================
 
+// An Adapton is a node in our computation graph.
 interface Adapton {
+  /** The computation */
   thunk: Function
+
+  /** The last computed result */
   result: any
+
+  /** Set of subcomputations that this node depends on */
   sub: Set<Adapton>
+
+  /** Set of supercomputations that depend on this node */
   super: Set<Adapton>
+
+  /** Is the result still valid? */
   clean: boolean
 }
 
-// Given a thunk, initialize an adapton.
-// We deviate slightly from the paper because JS doesn't allow recursive bindings--
-// the thunk passed in by the user can access the adapton itself via an argument.
+/** Given a thunk, initialize an adapton. */
 const makeAthunk = (thunk: (self: Adapton) => any): Adapton => {
   const a: Adapton = {
     thunk: () => {},
@@ -26,28 +34,33 @@ const makeAthunk = (thunk: (self: Adapton) => any): Adapton => {
     clean: false
   }
 
+  // We deviate slightly from the paper because JS doesn't allow recursive bindings--
+  // the thunk passed in by the user can access the adapton itself via an argument.
   a.thunk = () => thunk(a)
 
   return a
 }
 
+/** Add a dependency edge from a supercomputation to a subcomputation */
 const addEdge = (superComp: Adapton, subComp: Adapton) => {
   superComp.sub.add(subComp)
   subComp.super.add(superComp)
 }
 
+/** Remove a dependency edge */
 const deleteEdge = (superComp: Adapton, subComp: Adapton) => {
   superComp.sub.delete(subComp)
   subComp.super.delete(superComp)
 }
 
-// Compute the value of an Adapton
+/** Compute the current value of an adapton */
 const adaptonCompute = (a: Adapton): any => {
   if (a.clean) {
     // It the adapton is clean, the existing result is valid
     return a.result
   } else {
-    // Remove subcomputations, because we might have different ones when we recompute
+    // Remove subcomputations before recomputing.
+    // Any necessary subcomputations will be added back while computing.
     for (const x of a.sub) {
       deleteEdge(a, x)
     }
@@ -60,17 +73,17 @@ const adaptonCompute = (a: Adapton): any => {
   }
 }
 
-// Mark an adapton as dirty
+/** Mark an adapton as dirty, including recursively any supercomputations needed. */
 const adaptonDirty = (a: Adapton) => {
-  // Short-circuit if already dirty; this prevents dupliated dirtying work
+  // Short-circuit if already dirty; this prevents duplicated dirtying work
   if(!a.clean) return
   a.clean = false
   for (const x of a.super) {
-    // Have to recursively mark any supercomputations as dirty too
     adaptonDirty(x)
   }
 }
 
+/** Create a ref cell with an initial value */
 const adaptonRef = (val: any): Adapton => {
   const a: Adapton = makeAthunk(self => self.result)
   a.result = val
@@ -78,10 +91,14 @@ const adaptonRef = (val: any): Adapton => {
   return a
 }
 
+/** Set the value of a ref cell */
 const adaptonRefSet = (a: Adapton, val: any) => {
   a.result = val
   adaptonDirty(a)
 }
+
+// Test out the code so far
+// ===============
 
 const r1 = adaptonRef(8)
 const r2 = adaptonRef(10)
@@ -97,11 +114,14 @@ console.log(`8 - 10 = ${adaptonCompute(a)}`)
 adaptonRefSet(r1, 2)
 console.log(`2 - 10 = ${adaptonCompute(a)}`)
 
-// Mini-Adapton
-//=================
+// Mini-Adapton: some helpers
+//============================
 
 let currentlyAdapting: Adapton | null = null
 
+/** Compute an Adapton's result, while auto-tracking dependencies.
+ *  Include any value referenced during the computation as a subcomputation.
+ */
 const adaptonForce = (a: Adapton) => {
   // Remember what we were adapting
   let prevAdapting = currentlyAdapting
@@ -117,11 +137,8 @@ const adaptonForce = (a: Adapton) => {
   return result
 }
 
-// No macros in JS, so we make do with makeAThunk, and
-// define adapt as an alias for consistency w/ the paper.
-const adapt = makeAthunk
-
-// Another test
+// Some more tests
+// ================
 
 console.log("Mini-adapton")
 let r = adaptonRef(5)
